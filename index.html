@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Face Detection Video Control</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        box-sizing: border-box;
+        margin: auto;
+      }
+      .video-container {
+        height: 100vh;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: black;
+      }
+      #video-default,
+      #video-content {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      #video-content {
+        display: none;
+      }
+      #camera {
+        position: absolute;
+        z-index: 1;
+        width: 200px;
+        height: 150px;
+        bottom: 24px;
+        left: 16px;
+        opacity: 0;
+      }
+    </style>
+
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/polyfill/dist/polyfill.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh"></script>
+  </head>
+  <body>
+    <div class="video-container">
+      <div id="video-default"></div>
+      <div id="video-content"></div>
+    </div>
+
+    <!-- Webcam for Face Detection -->
+    <canvas id="camera" width="250" height="150"></canvas>
+
+    <script>
+      var playerDefault, playerContent;
+      var canvasElement = document.getElementById('camera');
+      var ctx = canvasElement.getContext('2d');
+
+      function onYouTubeIframeAPIReady() {
+        console.log('YouTube API ready');
+
+        playerDefault = new YT.Player('video-default', {
+          height: '100%',
+          width: '100%',
+          videoId: 'nwFAQXymkl0',
+          playerVars: {
+            autoplay: 1,
+            controls: 0,
+            allowfullscreen: 1,
+          },
+          events: {
+            onReady: onPlayerVideoDefaultReady,
+          },
+        });
+
+        playerContent = new YT.Player('video-content', {
+          height: '100%',
+          width: '100%',
+          videoId: 'rO8mrIPROOQ',
+          playerVars: {
+            autoplay: 0,
+            controls: 0,
+            allowfullscreen: 1,
+          },
+          events: {
+            onReady: onPlayerVideoContentReady,
+          },
+        });
+      }
+
+      function onPlayerVideoDefaultReady(event) {
+        event.target.playVideo();
+        console.log('Default player is ready');
+      }
+
+      function onPlayerVideoContentReady(event) {
+        console.log('Content player is ready');
+        playerContent = event.target; // Assign the player to a variable
+      }
+
+      function startCamera() {
+        navigator.mediaDevices
+          .getUserMedia({ video: true })
+          .then(function (stream) {
+            var webcamVideo = document.createElement('video');
+            webcamVideo.srcObject = stream;
+            webcamVideo.play();
+
+            // Load the face detector model
+            var model = faceDetection.SupportedModels.MediaPipeFaceDetector;
+            var detectorConfig = { runtime: 'tfjs', maxFaces: 10 };
+            faceDetection
+              .createDetector(model, detectorConfig)
+              .then(function (detector) {
+                detectFace({ webcamVideo: webcamVideo, detector: detector });
+              });
+          })
+          .catch(function (error) {
+            console.error('Error starting camera or loading model:', error);
+          });
+      }
+
+      function detectFace(params) {
+        var webcamVideo = params.webcamVideo;
+        var detector = params.detector;
+
+        detector
+          .estimateFaces(webcamVideo, { flipHorizontal: false })
+          .then(function (faces) {
+            ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            ctx.drawImage(
+              webcamVideo,
+              0,
+              0,
+              canvasElement.width,
+              canvasElement.height
+            );
+
+            faces.forEach(function (face) {
+              var keypoints = face.keypoints;
+
+              keypoints.forEach(function (keypoint) {
+                var x = keypoint.x;
+                var y = keypoint.y;
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                ctx.fillStyle = 'red';
+                ctx.fill();
+              });
+            });
+
+            if (faces.length > 0) {
+              // Face detected
+              console.log('Face detected');
+              if (playerDefault) {
+                playerDefault.stopVideo();
+                document.getElementById('video-default').style.display = 'none';
+              }
+              if (playerContent) {
+                document.getElementById('video-content').style.display =
+                  'block';
+                playerContent.playVideo(); // Ensure this is called on a ready player
+              }
+            } else {
+              // No face detected
+              console.log('No face detected');
+              if (playerContent) {
+                playerContent.stopVideo();
+                document.getElementById('video-content').style.display = 'none';
+              }
+              if (playerDefault) {
+                document.getElementById('video-default').style.display =
+                  'block';
+                playerDefault.playVideo();
+              }
+            }
+
+            requestAnimationFrame(function () {
+              detectFace(params);
+            });
+          });
+      }
+
+      startCamera();
+    </script>
+  </body>
+</html>
