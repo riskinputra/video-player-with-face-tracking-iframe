@@ -156,7 +156,7 @@
               // Face detected
               console.log('Face detected');
               if (playerDefault) {
-                playerDefault.stopVideo();
+                playerDefault.seekTo(0);
                 document.getElementById('video-default').style.display = 'none';
               }
               if (playerContent) {
@@ -168,7 +168,7 @@
               // No face detected
               console.log('No face detected');
               if (playerContent) {
-                playerContent.stopVideo();
+                playerContent.seekTo(0);
                 document.getElementById('video-content').style.display = 'none';
               }
               if (playerDefault) {
