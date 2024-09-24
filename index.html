@@ -62,24 +62,25 @@
 
       // Ambil nilai dari parameter 'source'
       const source = params.get('source');
-      const muted = params.get('muted');
+      const muted = Number(params.get('muted')) || 1;
+      const currentTime = Number(params.get('currentTime')) || 0
 
       // Lakukan validasi berdasarkan nilai 'source'
       if (source === 'content') {
           // Jika source adalah 'content'
           videoDefault.pause();
-          videoDefault.currentTime = 0;
+          videoDefault.currentTime = currentTime;
           videoDefault.style.display = 'none';  // Sembunyikan videoDefault
-          videoContent.muted = muted == 1;
+          videoContent.muted = muted === 1;
           videoContent.style.display = 'block'; // Tampilkan videoContent
           videoContent.play();                  // Putar videoContent
       } else {
           // Jika source adalah 'default'
           videoDefault.style.display = 'block'; // Tampilkan videoDefault
-          videoDefault.muted = muted == 1;     // Pastikan video tidak mute
+          videoDefault.muted = muted === 1;     // Pastikan video tidak mute
           videoDefault.play();                  // Putar videoDefault
           videoContent.pause();                 // Pause videoContent
-          videoContent.currentTime = 0;
+          videoContent.currentTime = currentTime;
           videoContent.style.display = 'none';  // Sembunyikan videoContent
       }
     </script>
