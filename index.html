@@ -19,70 +19,125 @@
         align-items: center;
         background-color: black;
       }
-      #video-default,
-      #video-content {
+      #video-iframe-default,
+      #video-iframe-content,
+      video,
+      iframe {
         width: 100%;
         height: 100%;
         object-fit: contain;
+        margin: auto;
       }
-
-      #video-content {
+      #video-iframe-content {
         display: none;
       }
+      #camera {
+        position: absolute;
+        z-index: 1;
+        width: 200px;
+        height: 150px;
+        bottom: 24px;
+        left: 16px;
+        opacity: 0;
+      }
     </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/@babel/polyfill/dist/polyfill.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh"></script>
   </head>
   <body>
     <div class="video-container">
-      <video id="video-default" autoplay muted>
-        <source
-          src="https://cdn.plyr.io/static/demo/View_From_A_Blue_Moon_Trailer-720p.mp4"
-          type="video/mp4"
-        />
-        Your browser does not support the video tag.
-      </video>
-      <video id="video-content" autoplay muted>
-        <source
-          src="https://files.vidstack.io/agent-327/720p.mp4"
-          type="video/mp4"
-        />
-        Your browser does not support the video tag.
-      </video>
+      <iframe
+        id="video-iframe-default"
+        src="https://video-player-track-iframe.netlify.app/?source=default&muted=1&currentTime=0"
+        frameborder="0"
+      ></iframe>
+      <iframe
+        id="video-iframe-content"
+        src="https://video-player-track-iframe.netlify.app/?source=content&currentTime=0"
+        frameborder="0"
+      ></iframe>
     </div>
 
+    <!-- Webcam for Face Detection -->
+    <canvas id="camera" width="250" height="150"></canvas>
+
     <script>
-      // Ambil elemen video
-      const videoDefault = document.getElementById('video-default');
-      const videoContent = document.getElementById('video-content');
+      var videoIframeDefault = document.getElementById('video-iframe-default');
+      var videoIframeContent = document.getElementById('video-iframe-content');
+      var canvasElement = document.getElementById('camera');
+      var ctx = canvasElement.getContext('2d');
 
-      // Dapatkan URL saat ini
-      const url = new URL(window.location.href);
+      function startCamera() {
+        navigator.mediaDevices
+          .getUserMedia({ video: true })
+          .then(function (stream) {
+            var webcamVideo = document.createElement('video');
+            webcamVideo.srcObject = stream;
+            webcamVideo.play();
 
-      // Gunakan URLSearchParams untuk mendapatkan parameter 'source'
-      const params = new URLSearchParams(url.search);
-
-      // Ambil nilai dari parameter 'source'
-      const source = params.get('source');
-      const muted = Number(params.get('muted')) || 1;
-      const currentTime = Number(params.get('currentTime')) || 0
-
-      // Lakukan validasi berdasarkan nilai 'source'
-      if (source === 'content') {
-          // Jika source adalah 'content'
-          videoDefault.pause();
-          videoDefault.currentTime = currentTime;
-          videoDefault.style.display = 'none';  // Sembunyikan videoDefault
-          videoContent.muted = muted === 1;
-          videoContent.style.display = 'block'; // Tampilkan videoContent
-          videoContent.play();                  // Putar videoContent
-      } else {
-          // Jika source adalah 'default'
-          videoDefault.style.display = 'block'; // Tampilkan videoDefault
-          videoDefault.muted = muted === 1;     // Pastikan video tidak mute
-          videoDefault.play();                  // Putar videoDefault
-          videoContent.pause();                 // Pause videoContent
-          videoContent.currentTime = currentTime;
-          videoContent.style.display = 'none';  // Sembunyikan videoContent
+            // Load the face detector model
+            var model = faceDetection.SupportedModels.MediaPipeFaceDetector;
+            var detectorConfig = { runtime: 'tfjs', maxFaces: 10 };
+            faceDetection
+              .createDetector(model, detectorConfig)
+              .then(function (detector) {
+                detectFace({ webcamVideo: webcamVideo, detector: detector });
+              });
+          })
+          .catch(function (error) {
+            console.error('Error starting camera or loading model:', error);
+          });
       }
+
+      function detectFace(params) {
+        var webcamVideo = params.webcamVideo;
+        var detector = params.detector;
+
+        detector
+          .estimateFaces(webcamVideo, { flipHorizontal: false })
+          .then(function (faces) {
+            ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            ctx.drawImage(
+              webcamVideo,
+              0,
+              0,
+              canvasElement.width,
+              canvasElement.height
+            );
+
+            faces.forEach(function (face) {
+              var keypoints = face.keypoints;
+
+              keypoints.forEach(function (keypoint) {
+                var x = keypoint.x;
+                var y = keypoint.y;
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                ctx.fillStyle = 'red';
+                ctx.fill();
+              });
+            });
+
+            if (faces.length > 0) {
+              videoIframeDefault.style.display = 'none';
+              videoIframeContent.style.display = 'block';
+            } else {
+              videoIframeDefault.src =
+                'https://video-player-track-iframe.netlify.app/?source=default&muted=0&currentTime=0';
+              videoIframeDefault.style.display = 'block';
+              videoIframeContent.style.display = 'none';
+            }
+
+            requestAnimationFrame(function () {
+              detectFace(params);
+            });
+          });
+      }
+
+      startCamera();
     </script>
   </body>
 </html>
