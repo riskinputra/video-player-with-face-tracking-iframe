@@ -19,125 +19,173 @@
         align-items: center;
         background-color: black;
       }
-      #video-iframe-default,
-      #video-iframe-content,
-      video,
-      iframe {
+      #video-default,
+      #video-content {
         width: 100%;
         height: 100%;
         object-fit: contain;
-        margin: auto;
       }
-      #video-iframe-content {
+
+      #video-content {
         display: none;
       }
       #camera {
         position: absolute;
         z-index: 1;
-        width: 200px;
-        height: 150px;
+        width: 150px;
+        height: 100px;
         bottom: 24px;
         left: 16px;
-        opacity: 0;
+        opacity: 1;
       }
     </style>
 
-    <script src="https://cdn.jsdelivr.net/npm/@babel/polyfill/dist/polyfill.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-detection"></script>
+    <!-- Require the peer dependencies of face-landmarks-detection. -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+
+    <!-- You must explicitly require a TF.js backend if you're not using the TF.js union bundle. -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection"></script>
   </head>
   <body>
     <div class="video-container">
-      <iframe
-        id="video-iframe-default"
-        src="https://video-player-only.netlify.app/?source=default&muted=1&currentTime=0"
-        frameborder="0"
-      ></iframe>
-      <iframe
-        id="video-iframe-content"
-        src="https://video-player-only.netlify.app/?source=content&currentTime=0"
-        frameborder="0"
-      ></iframe>
+      <video id="video-default" autoplay muted loop>
+        <source
+          src="./idle.mp4"
+          type="video/mp4"
+        />
+        Your browser does not support the video tag.
+      </video>
+      <video id="video-content" loop>
+        <source
+          src="./detected.mp4"
+          type="video/mp4"
+        />
+        Your browser does not support the video tag.
+      </video>
     </div>
 
     <!-- Webcam for Face Detection -->
-    <canvas id="camera" width="250" height="150"></canvas>
+    <video
+      id="video"
+      autoplay
+      playsinline
+      style="
+        visibility: hidden;
+        width: auto;
+        height: auto;
+        position: absolute;
+        bottom: 0;
+      "
+    ></video>
+    <canvas id="camera"></canvas>
 
     <script>
-      var videoIframeDefault = document.getElementById('video-iframe-default');
-      var videoIframeContent = document.getElementById('video-iframe-content');
-      var canvasElement = document.getElementById('camera');
-      var ctx = canvasElement.getContext('2d');
+      var videoDefault = document.getElementById('video-default');
+      var videoContent = document.getElementById('video-content');
 
-      function startCamera() {
-        navigator.mediaDevices
-          .getUserMedia({ video: true })
-          .then(function (stream) {
-            var webcamVideo = document.createElement('video');
-            webcamVideo.srcObject = stream;
-            webcamVideo.play();
+      async function setupCamera() {
+        const video = document.getElementById('video'); // Use existing video element
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+        });
+        video.srcObject = stream;
+        video.play()
 
-            // Load the face detector model
-            var model = faceDetection.SupportedModels.MediaPipeFaceDetector;
-            var detectorConfig = { runtime: 'tfjs', maxFaces: 10 };
-            faceDetection
-              .createDetector(model, detectorConfig)
-              .then(function (detector) {
-                detectFace({ webcamVideo: webcamVideo, detector: detector });
-              });
-          })
-          .catch(function (error) {
-            console.error('Error starting camera or loading model:', error);
-          });
+        return new Promise((resolve) => {
+          video.onloadedmetadata = () => {
+            resolve(video);
+          };
+        });
       }
 
-      function detectFace(params) {
-        var webcamVideo = params.webcamVideo;
-        var detector = params.detector;
+      async function loadModel() {
+        const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
+        const detectorConfig = {
+          runtime: 'mediapipe',
+          solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh',
+          // or 'base/node_modules/@mediapipe/face_mesh' in npm.
+        };
+        const detector = await faceLandmarksDetection.createDetector(
+          model,
+          detectorConfig
+        );
+        return detector;
+      }
 
-        detector
-          .estimateFaces(webcamVideo, { flipHorizontal: false })
-          .then(function (faces) {
-            ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            ctx.drawImage(
-              webcamVideo,
-              0,
-              0,
-              canvasElement.width,
-              canvasElement.height
-            );
+      async function detectFaceLandmarks(video, detector, canvas) {
+        const ctx = canvas.getContext('2d');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
 
-            faces.forEach(function (face) {
-              var keypoints = face.keypoints;
+        async function detect() {
+          const webcamVideo = document.getElementById('video');
+          const faces = await detector.estimateFaces(video, {
+            flipHorizontal: false,
+          }); // Mirror video for webcam
 
-              keypoints.forEach(function (keypoint) {
-                var x = keypoint.x;
-                var y = keypoint.y;
+          ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+          
+          ctx.drawImage(
+            webcamVideo,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+          );
+
+          if (faces.length > 0) {
+            faces.forEach((face) => {
+              const box = face.box;
+              const { xMin, yMin, xMax, yMax } = box;
+
+              // Gambar kotak wajah (bounding box)
+              ctx.strokeStyle = 'green';
+              ctx.lineWidth = 2;
+              ctx.strokeRect(xMin, yMin, xMax - xMin, yMax - yMin);
+
+              // Gambar titik-titik (landmarks)
+              face.keypoints.forEach((keypoint) => {
+                const { x, y } = keypoint;
+                ctx.fillStyle = 'red';
                 ctx.beginPath();
                 ctx.arc(x, y, 3, 0, 2 * Math.PI);
-                ctx.fillStyle = 'red';
                 ctx.fill();
               });
             });
 
-            if (faces.length > 0) {
-              videoIframeDefault.style.display = 'none';
-              videoIframeContent.style.display = 'block';
-            } else {
-              videoIframeDefault.src =
-                'https://video-player-track-iframe.netlify.app/?source=default&muted=0&currentTime=0';
-              videoIframeDefault.style.display = 'block';
-              videoIframeContent.style.display = 'none';
-            }
+            videoDefault.pause();
+            videoDefault.currentTime = 0;
+            videoDefault.style.display = 'none';
+            videoContent.style.display = 'block';
+            videoContent.play();
+          } else {
+            videoDefault.style.display = 'block';
+            videoDefault.muted = false;
+            videoDefault.play();
+            videoContent.pause();
+            videoContent.currentTime = 0;
+            videoContent.style.display = 'none';
+          }
 
-            requestAnimationFrame(function () {
-              detectFace(params);
-            });
-          });
+          requestAnimationFrame(detect); // Continue the detection loop
+        }
+
+        detect();
       }
 
-      startCamera();
+      async function run() {
+        const video = await setupCamera(); // Start video feed
+        video.play();
+
+        const detector = await loadModel(); // Load face landmark detection model
+        const canvas = document.getElementById('camera'); // Get canvas element
+        detectFaceLandmarks(video, detector, canvas); // Start detecting landmarks
+      }
+
+      run();
     </script>
   </body>
 </html>
