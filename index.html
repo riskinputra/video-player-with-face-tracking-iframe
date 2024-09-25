@@ -107,6 +107,7 @@
         const detectorConfig = {
           runtime: 'mediapipe',
           solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh',
+          maxFaces: 10
           // or 'base/node_modules/@mediapipe/face_mesh' in npm.
         };
         const detector = await faceLandmarksDetection.createDetector(
